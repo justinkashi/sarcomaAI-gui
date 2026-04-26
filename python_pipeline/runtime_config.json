@@ -1,7 +1,0 @@
-{
-  "institution": "002",
-  "dataset_path": "/Users/bustin/sarcomaAI/sarcomaai_workspace/NEW_DICOMS",
-  "sts_dataset": "/Users/bustin/sarcomaAI/sarcomaai_workspace/processed",
-  "selection_csv": "/Users/bustin/sarcomaAI/sarcomaai_workspace/.selections.csv",
-  "is_new_dataset": true
-}
