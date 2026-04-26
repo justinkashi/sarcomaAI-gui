@@ -11,10 +11,9 @@ export default function ImportStep() {
   const [folders,      setFolders]      = useState([]);
   const [importStatus, setImportStatus] = useState('idle'); // idle | running | done | error
   const [log,          setLog]          = useState([]);     // { folder, status }
+  const [picking,      setPicking]      = useState(false);  // native picker in progress
 
   const debounceRef = useRef(null);
-  const [dragging,     setDragging]     = useState(false);
-  const [dropMessage,  setDropMessage]  = useState('');
 
   const scanSource = useCallback(async (path) => {
     if (!path.trim()) { setScanStatus('idle'); setFolders([]); return; }
@@ -38,55 +37,21 @@ export default function ImportStep() {
     debounceRef.current = setTimeout(() => scanSource(val), 500);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    // Only clear if leaving the drop zone entirely (not entering a child)
-    if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false);
-  };
-
-  const extractPath = (e) => {
-    // 1. file:// URI list — works when Finder drag is allowed by the browser
-    const uriList = e.dataTransfer.getData('text/uri-list');
-    if (uriList) {
-      const lines = uriList.split(/\r?\n/).filter(l => l && !l.startsWith('#'));
-      const fileUri = lines.find(l => l.startsWith('file://'));
-      if (fileUri) {
-        return decodeURIComponent(
-          fileUri.replace(/^file:\/\/localhost/, '').replace(/^file:\/\//, '').trim()
-        );
+  // Opens a native macOS folder picker via the Flask backend (osascript).
+  // The browser never touches the path — Python resolves it and returns JSON.
+  const pickFolder = async () => {
+    setPicking(true);
+    try {
+      const res  = await fetch(`${API}/api/pick-folder`);
+      const data = await res.json();
+      if (data.path) {
+        setSourcePath(data.path);
+        scanSource(data.path);
       }
-    }
-    // 2. Plain text — covers terminal drag or file manager text export
-    const text = (e.dataTransfer.getData('text/plain') || '').trim();
-    if (text.startsWith('/') || /^[A-Za-z]:[/\\]/.test(text)) return text;
-
-    return null;
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDragging(false);
-    setDropMessage('');
-
-    const path = extractPath(e);
-    if (path) {
-      setDropMessage('');
-      setSourcePath(path);
-      clearTimeout(debounceRef.current);
-      scanSource(path);
-      return;
-    }
-
-    // Browser blocked the path (common in Chrome on macOS for security reasons)
-    // Detect if at least a folder was dropped so we can show a helpful message
-    const hasItem = e.dataTransfer.items?.length > 0 || e.dataTransfer.files?.length > 0;
-    if (hasItem) {
-      setDropMessage('Browser blocked the folder path — please type it in the field below.');
+    } catch {
+      // silently ignore — user can still type the path manually
+    } finally {
+      setPicking(false);
     }
   };
 
@@ -151,46 +116,39 @@ export default function ImportStep() {
         <div style={{ marginBottom: '1.25rem' }}>
           <label style={labelStyle}>Source DICOM Folder</label>
 
-          {/* Drop zone */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            style={{
-              border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
-              borderRadius: 8,
-              padding: '1rem',
-              marginBottom: 8,
-              background: dragging ? 'rgba(91,142,244,0.06)' : 'var(--bg-elevated)',
-              transition: 'border-color 0.15s, background 0.15s',
-              textAlign: 'center',
-              color: dragging ? 'var(--accent)' : dropMessage ? 'var(--warning)' : 'var(--text-secondary)',
-              fontSize: 13,
-              cursor: 'default',
-              userSelect: 'none',
-            }}
-          >
-            {dragging
-              ? 'Release to set path'
-              : dropMessage
-              ? dropMessage
-              : 'Drag folder here'}
+          {/* Browse button + text input row */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <input
+              type="text"
+              value={sourcePath}
+              onChange={handlePathChange}
+              disabled={isRunning || picking}
+              placeholder="/path/to/source/DICOM"
+              style={{
+                ...inputStyle,
+                flex: 1,
+                opacity: (isRunning || picking) ? 0.6 : 1,
+              }}
+            />
+            <button
+              onClick={pickFolder}
+              disabled={isRunning || picking}
+              style={{
+                padding: '0 1rem',
+                borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-elevated)',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: (isRunning || picking) ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+                opacity: (isRunning || picking) ? 0.6 : 1,
+              }}
+            >
+              {picking ? 'Choosing…' : 'Browse…'}
+            </button>
           </div>
-
-          <input
-            type="text"
-            value={sourcePath}
-            onChange={handlePathChange}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            disabled={isRunning}
-            placeholder="/path/to/source/DICOM  — or drag folder above"
-            style={{
-              ...inputStyle,
-              opacity: isRunning ? 0.6 : 1,
-            }}
-          />
 
           {/* Scan status */}
           {scanStatus === 'scanning' && (

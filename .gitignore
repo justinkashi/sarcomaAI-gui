@@ -1,21 +1,19 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-
-node_modules
 dist
-*.local
-/dist_venv
+dist_venv
+# PyInstaller intermediate build artifacts
+build/
 
-# Editor directories and files
-.idea
-.DS_Store
+# React
+frontend/node_modules/
+frontend/build/
 
-# Exclude Python cache directories
+# Python
 __pycache__/
+*.pyc
+*.pyo
 
-# PHI
-PA000002/
+# Runtime-generated config (written by the app at runtime, not source)
+python_pipeline/runtime_config.json
 
-selections.csv*
+# macOS junk
+.DS_Store

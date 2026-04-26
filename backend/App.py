@@ -597,6 +597,33 @@ def export_ledger():
 
 
 # ---------------------------------------------------------------------------
+# Native folder picker (macOS)
+# ---------------------------------------------------------------------------
+
+@app.route('/api/pick-folder')
+def pick_folder():
+    """
+    Opens a native macOS folder-picker dialog via osascript and returns the
+    selected path. The browser never touches the filesystem path — osascript
+    runs server-side and hands the real POSIX path back as JSON.
+    If the user cancels, returns {'path': null}.
+    """
+    import subprocess
+    try:
+        proc = subprocess.run(
+            ['osascript', '-e', 'POSIX path of (choose folder)'],
+            capture_output=True, text=True, timeout=120
+        )
+        if proc.returncode != 0:
+            # User cancelled the dialog
+            return jsonify({'path': None})
+        path = proc.stdout.strip()
+        return jsonify({'path': path})
+    except Exception as e:
+        return jsonify({'path': None, 'error': str(e)})
+
+
+# ---------------------------------------------------------------------------
 # React static file serving (used when Flask IS the production web server)
 # ---------------------------------------------------------------------------
 
