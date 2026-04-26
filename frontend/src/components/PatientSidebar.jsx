@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 
 function statusColor(sel) {
   if (!sel || (!sel.t1 && !sel.t2)) return 'var(--danger)';
+  if (sel.status === 'processed') return 'var(--accent)';
   if (sel.t1 && sel.t2) return 'var(--success)';
   return 'var(--warning)';
 }
@@ -57,10 +58,11 @@ export default function PatientSidebar() {
         {patients.map(pt => {
           const studies = patientTree[pt] || [];
           const isExpanded = expandedPatients[pt] !== false && (expandedPatients[pt] || pt === currentPatient);
-          const patSel = studies.map(st => selections[`${pt}/${st}`] || { t1: null, t2: null });
+          const patSel = studies.map(st => selections[`${pt}/${st}`] || { t1: null, t2: null, status: 'pending' });
+          const allProcessed = patSel.every(s => s.status === 'processed');
           const allDone = patSel.every(s => s.t1 && s.t2);
           const anyDone = patSel.some(s => s.t1 || s.t2);
-          const dotColor = allDone ? 'var(--success)' : anyDone ? 'var(--warning)' : 'var(--danger)';
+          const dotColor = allProcessed ? 'var(--accent)' : allDone ? 'var(--success)' : anyDone ? 'var(--warning)' : 'var(--danger)';
 
           return (
             <div key={pt}>
@@ -127,6 +129,11 @@ export default function PatientSidebar() {
                       }}>
                         {st}
                       </span>
+                      {sel.status === 'processed' && (
+                        <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.03em' }}>
+                          DONE
+                        </span>
+                      )}
                     </div>
 
                     {isCurrentStudy && currentSeriesForStudy.map(ser => {

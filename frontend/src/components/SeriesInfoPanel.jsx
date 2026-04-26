@@ -119,60 +119,77 @@ export default function SeriesInfoPanel() {
 
         {currentSeries && (
           <Section title="Actions">
-            <button
-              onClick={() => selectModality('t1', currentSeries)}
-              style={{
-                width: '100%',
-                padding: '0.6rem',
+            {sel.status === 'processed' ? (
+              <div style={{
+                padding: '0.6rem 0.75rem',
                 borderRadius: 6,
-                border: 'none',
-                outline: `1px solid ${isT1 ? 'var(--t1)' : 'var(--border)'}`,
-                background: isT1 ? 'rgba(239,68,68,0.15)' : 'var(--bg-elevated)',
-                color: isT1 ? 'var(--t1)' : 'var(--text-primary)',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                marginBottom: 8,
-                transition: 'all 0.15s',
-              }}
-            >
-              {isT1 ? '✓ T1 Selected' : 'Mark as T1'}
-            </button>
-            <button
-              onClick={() => selectModality('t2', currentSeries)}
-              style={{
-                width: '100%',
-                padding: '0.6rem',
-                borderRadius: 6,
-                border: 'none',
-                outline: `1px solid ${isT2 ? 'var(--t2)' : 'var(--border)'}`,
-                background: isT2 ? 'rgba(59,130,246,0.15)' : 'var(--bg-elevated)',
-                color: isT2 ? 'var(--t2)' : 'var(--text-primary)',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                marginBottom: 12,
-                transition: 'all 0.15s',
-              }}
-            >
-              {isT2 ? '✓ T2 Selected' : 'Mark as T2'}
-            </button>
-
-            <button
-              onClick={undoSelection}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-secondary)',
+                background: 'rgba(91,142,244,0.1)',
+                border: '1px solid rgba(91,142,244,0.3)',
+                color: 'var(--accent)',
                 fontSize: 12,
-                cursor: 'pointer',
-                padding: 0,
-                textDecoration: 'underline',
-                display: 'block',
-              }}
-            >
-              Undo Selections
-            </button>
+                fontWeight: 600,
+                textAlign: 'center',
+                marginBottom: 8,
+              }}>
+                Already processed — in STS dataset
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => selectModality('t1', currentSeries)}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem',
+                    borderRadius: 6,
+                    border: 'none',
+                    outline: `1px solid ${isT1 ? 'var(--t1)' : 'var(--border)'}`,
+                    background: isT1 ? 'rgba(239,68,68,0.15)' : 'var(--bg-elevated)',
+                    color: isT1 ? 'var(--t1)' : 'var(--text-primary)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    marginBottom: 8,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {isT1 ? '✓ T1 Selected' : 'Mark as T1'}
+                </button>
+                <button
+                  onClick={() => selectModality('t2', currentSeries)}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem',
+                    borderRadius: 6,
+                    border: 'none',
+                    outline: `1px solid ${isT2 ? 'var(--t2)' : 'var(--border)'}`,
+                    background: isT2 ? 'rgba(59,130,246,0.15)' : 'var(--bg-elevated)',
+                    color: isT2 ? 'var(--t2)' : 'var(--text-primary)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    marginBottom: 12,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {isT2 ? '✓ T2 Selected' : 'Mark as T2'}
+                </button>
+                <button
+                  onClick={undoSelection}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline',
+                    display: 'block',
+                  }}
+                >
+                  Undo Selections
+                </button>
+              </>
+            )}
           </Section>
         )}
 

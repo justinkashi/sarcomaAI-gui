@@ -6,7 +6,8 @@ const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const [isConfigured, setIsConfigured] = useState(false);
-  const [config, setConfig] = useState({ institution: '', dicomFolder: '', stsDataset: '', isNewDataset: null });
+  const [isImportDone, setIsImportDone] = useState(false);
+  const [config, setConfig] = useState({ institution: '', workspacePath: '' });
   const [patientTree, setPatientTree] = useState({});
   const [selections, setSelections] = useState({});
   const [currentPatient, setCurrentPatient] = useState(null);
@@ -52,9 +53,13 @@ export function AppProvider({ children }) {
       try {
         const r = await fetch(`${API}/api/get-selection?patient=${pt}/${st}`);
         const data = await r.json();
-        allSels[`${pt}/${st}`] = { t1: data.t1 || null, t2: data.t2 || null };
+        allSels[`${pt}/${st}`] = {
+          t1: data.t1 || null,
+          t2: data.t2 || null,
+          status: data.status || 'pending',
+        };
       } catch {
-        allSels[`${pt}/${st}`] = { t1: null, t2: null };
+        allSels[`${pt}/${st}`] = { t1: null, t2: null, status: 'pending' };
       }
     }
     setSelections(allSels);
@@ -105,20 +110,23 @@ export function AppProvider({ children }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        institution: cfg.institution,
-        dicomFolder: cfg.dicomFolder,
-        stsDataset: cfg.stsDataset,
-        isNewDataset: cfg.isNewDataset,
+        institution:   cfg.institution,
+        workspacePath: cfg.workspacePath,
       }),
     });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(text);
     }
+    const json = await res.json();
     setConfig(cfg);
     localStorage.setItem('sarcomaai_last_config', JSON.stringify(cfg));
     setIsConfigured(true);
-    await loadPatients();
+    // Auto-skip import step if the inbox already has patient folders
+    if (json.hasPatients) {
+      setIsImportDone(true);
+      await loadPatients();
+    }
   }, [loadPatients]);
 
   const navigateTo = useCallback(async (patient, study, series) => {
@@ -161,7 +169,7 @@ export function AppProvider({ children }) {
       newT2 = current.t2 === seriesName ? null : seriesName;
     }
 
-    const newSel = { t1: newT1, t2: newT2 };
+    const newSel = { t1: newT1, t2: newT2, status: 'pending' };
     setSelections(prev => ({ ...prev, [key]: newSel }));
     setSavedAt(null);
 
@@ -190,7 +198,7 @@ export function AppProvider({ children }) {
   const undoSelection = useCallback(async () => {
     if (!currentPatient || !currentStudy) return;
     const key = `${currentPatient}/${currentStudy}`;
-    setSelections(prev => ({ ...prev, [key]: { t1: null, t2: null } }));
+    setSelections(prev => ({ ...prev, [key]: { t1: null, t2: null, status: 'pending' } }));
     await fetch(`${API}/api/save-selection`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -229,8 +237,15 @@ export function AppProvider({ children }) {
     };
   }, []);
 
+  const skipImport = useCallback(() => { setIsImportDone(true); }, []);
+
+  const finishImport = useCallback(async () => {
+    setIsImportDone(true);
+    await loadPatients();
+  }, [loadPatients]);
+
   const value = {
-    isConfigured, config, patientTree, selections,
+    isConfigured, isImportDone, config, patientTree, selections,
     currentPatient, currentStudy, currentSeries,
     seriesList, fileCount, sliceIndex, setSliceIndex,
     seriesMetadata, pipelineState, setPipelineState,
@@ -238,6 +253,7 @@ export function AppProvider({ children }) {
     totalStudies, completeStudies, allComplete,
     configure, loadPatients, navigateTo, selectSeries,
     selectModality, undoSelection, startPipeline,
+    skipImport, finishImport,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

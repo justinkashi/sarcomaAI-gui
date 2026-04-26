@@ -58,7 +58,7 @@ def copy_selected_series(
             orig_to_new[orig_id] = new_id
 
         sts_name = build_sts_name(institution, int(new_id[2:]), modality)
-        src = dataset / "DICOM" / orig_id / study / series
+        src = dataset / orig_id / study / series
         dst = sts_dataset / "DICOM" / new_id / study / series
 
         # Check if destination already exists and is valid

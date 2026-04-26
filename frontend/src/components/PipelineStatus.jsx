@@ -1,8 +1,31 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+
+const API = 'http://localhost:5050';
 
 export default function PipelineStatus() {
   const { pipelineState, setPipelineState, pipelineLog } = useApp();
+  const [exporting,    setExporting]    = useState(false);
+  const [exportResult, setExportResult] = useState(''); // filename on success, error msg on fail
+
+  const exportLedger = async () => {
+    setExporting(true);
+    setExportResult('');
+    try {
+      const res = await fetch(`${API}/api/export-ledger`, { method: 'POST' });
+      if (!res.ok) {
+        const text = await res.text();
+        setExportResult(`Error: ${text || 'Export failed'}`);
+        return;
+      }
+      const data = await res.json();
+      setExportResult(`Saved: ${data.filename}`);
+    } catch (e) {
+      setExportResult(`Error: ${e.message || 'Export failed'}`);
+    } finally {
+      setExporting(false);
+    }
+  };
   const logRef = useRef(null);
 
   useEffect(() => {
@@ -67,6 +90,36 @@ export default function PipelineStatus() {
         <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>
           {titleMap[pipelineState]}
         </span>
+
+        {pipelineState === 'done' && (
+          <button
+            onClick={exportLedger}
+            disabled={exporting}
+            style={{
+              background: 'var(--accent)',
+              border: 'none',
+              borderRadius: 5,
+              color: '#fff',
+              padding: '3px 12px',
+              cursor: exporting ? 'not-allowed' : 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              opacity: exporting ? 0.6 : 1,
+            }}
+          >
+            {exporting ? 'Exporting...' : 'Export Ledger'}
+          </button>
+        )}
+
+        {exportResult && (
+          <span style={{
+            fontSize: 11,
+            color: exportResult.startsWith('Error') ? 'var(--danger)' : 'var(--success)',
+            fontFamily: 'monospace',
+          }}>
+            {exportResult}
+          </span>
+        )}
 
         {pipelineState !== 'running' && (
           <button

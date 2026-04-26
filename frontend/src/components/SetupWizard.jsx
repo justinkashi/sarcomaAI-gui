@@ -1,40 +1,70 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+
+const API = 'http://localhost:5050';
 
 const INSTITUTIONS = {
   'Memorial Sloan Kettering Cancer Center': '001',
-  'McGill University Health Centre': '002',
+  'McGill University Health Centre':        '002',
 };
+
+const CODE_TO_NAME = Object.fromEntries(
+  Object.entries(INSTITUTIONS).map(([name, code]) => [code, name])
+);
 
 export default function SetupWizard() {
   const { configure } = useApp();
-  const [institution, setInstitution] = useState('');
-  const [dicomFolder, setDicomFolder] = useState('');
-  const [isNewDataset, setIsNewDataset] = useState(null);
-  const [stsDataset, setStsDataset] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
+  const [institution,      setInstitution]      = useState('');
+  const [workspacePath,    setWorkspacePath]     = useState('');
+  const [workspaceStatus,  setWorkspaceStatus]   = useState(null); // null | { exists, institutionCode }
+  const [institutionLocked, setInstitutionLocked] = useState(false);
+  const [loading,          setLoading]           = useState(false);
+  const [error,            setError]             = useState('');
+  const debounceRef = useRef(null);
+
+  const checkWorkspace = useCallback(async (path) => {
+    if (!path.trim()) { setWorkspaceStatus(null); setInstitutionLocked(false); return; }
+    try {
+      const res  = await fetch(`${API}/api/check-workspace?path=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      setWorkspaceStatus(data);
+      if (data.exists && data.institutionCode) {
+        const name = CODE_TO_NAME[data.institutionCode] || data.institutionCode;
+        setInstitution(name);
+        setInstitutionLocked(true);
+      } else {
+        setInstitutionLocked(false);
+      }
+    } catch {
+      setWorkspaceStatus(null);
+      setInstitutionLocked(false);
+    }
+  }, []);
+
+  // Pre-fill from last session and immediately run workspace detection
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('sarcomaai_last_config') || 'null');
-      if (saved) {
-        if (saved.institution) setInstitution(saved.institution);
-        if (saved.dicomFolder) setDicomFolder(saved.dicomFolder);
-        if (saved.isNewDataset !== undefined && saved.isNewDataset !== null) setIsNewDataset(saved.isNewDataset);
-        if (saved.stsDataset) setStsDataset(saved.stsDataset);
+      if (saved?.institution)   setInstitution(saved.institution);
+      if (saved?.workspacePath) {
+        setWorkspacePath(saved.workspacePath);
+        checkWorkspace(saved.workspacePath);
       }
     } catch {}
-  }, []);
+  }, [checkWorkspace]);
 
-  const valid = institution && dicomFolder && isNewDataset !== null && stsDataset;
+  const valid = institution && workspacePath.trim();
 
   const handleSubmit = async () => {
     if (!valid) return;
     setLoading(true);
     setError('');
     try {
-      await configure({ institution: INSTITUTIONS[institution] || institution, dicomFolder, stsDataset, isNewDataset });
+      await configure({
+        institution: INSTITUTIONS[institution] || institution,
+        workspacePath: workspacePath.trim(),
+      });
     } catch (e) {
       setError(e.message || 'Setup failed');
     } finally {
@@ -59,79 +89,98 @@ export default function SetupWizard() {
         width: '100%',
         maxWidth: 520,
       }}>
+        {/* Header */}
         <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
           <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)', letterSpacing: '-0.5px' }}>
             SarcomaAI
           </div>
           <div style={{ color: 'var(--text-secondary)', marginTop: 6, fontSize: 14 }}>
-            Configure your imaging dataset to get started
+            Select your workspace to get started
           </div>
         </div>
 
+        {/* Institution */}
         <div style={{ marginBottom: '1.25rem' }}>
           <label style={labelStyle}>Institution</label>
           <select
             value={institution}
-            onChange={e => setInstitution(e.target.value)}
-            style={selectStyle}
+            onChange={e => { if (!institutionLocked) setInstitution(e.target.value); }}
+            disabled={institutionLocked}
+            style={{ ...selectStyle, opacity: institutionLocked ? 0.6 : 1, cursor: institutionLocked ? 'not-allowed' : 'pointer' }}
           >
             <option value="" disabled>-- Select Institution --</option>
             {Object.keys(INSTITUTIONS).map(n => <option key={n} value={n}>{n}</option>)}
           </select>
+          {institutionLocked && (
+            <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>
+              Loaded from existing workspace
+            </div>
+          )}
         </div>
 
+        {/* Workspace path */}
         <div style={{ marginBottom: '1.25rem' }}>
-          <label style={labelStyle}>DICOM Folder Path</label>
+          <label style={labelStyle}>SarcomaAI Workspace</label>
           <input
             type="text"
-            value={dicomFolder}
-            onChange={e => setDicomFolder(e.target.value)}
-            placeholder="/path/to/Dataset/DICOM"
+            value={workspacePath}
+            onChange={e => {
+              const val = e.target.value;
+              setWorkspacePath(val);
+              clearTimeout(debounceRef.current);
+              debounceRef.current = setTimeout(() => checkWorkspace(val), 500);
+            }}
+            placeholder="/path/to/parent/folder"
             style={inputStyle}
           />
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Folder containing PA-numbered subfolders
+            A <code style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>sarcomaai_workspace/</code> folder will be created here
           </div>
+
+          {/* Detection badge */}
+          {workspaceStatus !== null && (
+            <div style={{
+              marginTop: 8,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 5,
+              fontSize: 12,
+              fontWeight: 600,
+              background: workspaceStatus.exists
+                ? 'rgba(91,142,244,0.12)'
+                : 'rgba(34,197,94,0.12)',
+              border: `1px solid ${workspaceStatus.exists ? 'rgba(91,142,244,0.3)' : 'rgba(34,197,94,0.3)'}`,
+              color: workspaceStatus.exists ? 'var(--accent)' : 'var(--success)',
+            }}>
+              <span>{workspaceStatus.exists ? '◉' : '◎'}</span>
+              {workspaceStatus.exists
+                ? 'Existing workspace detected — will continue where you left off'
+                : 'New workspace — folders will be created automatically'}
+            </div>
+          )}
         </div>
 
-        <div style={{ marginBottom: '1.25rem' }}>
-          <label style={labelStyle}>Dataset Type</label>
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button
-              onClick={() => setIsNewDataset(true)}
-              style={{
-                ...toggleBase,
-                ...(isNewDataset === true ? toggleActive : toggleInactive),
-              }}
-            >
-              New Dataset
-            </button>
-            <button
-              onClick={() => setIsNewDataset(false)}
-              style={{
-                ...toggleBase,
-                ...(isNewDataset === false ? toggleActive : toggleInactive),
-              }}
-            >
-              Existing Dataset
-            </button>
+        {/* Workspace layout hint */}
+        <div style={{
+          marginBottom: '1.5rem',
+          padding: '0.65rem 0.9rem',
+          background: 'var(--bg-elevated)',
+          borderRadius: 6,
+          fontSize: 12,
+          color: 'var(--text-secondary)',
+          lineHeight: 1.9,
+          fontFamily: 'monospace',
+        }}>
+          <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4, fontFamily: 'inherit', fontSize: 11 }}>
+            WORKSPACE LAYOUT
           </div>
+          sarcomaai_workspace/<br />
+          &nbsp;&nbsp;NEW_DICOMS/&nbsp;&nbsp;&nbsp;← drop new patient folders here<br />
+          &nbsp;&nbsp;processed/&nbsp;&nbsp;&nbsp;&nbsp;← anonymized output (auto-managed)<br />
+          &nbsp;&nbsp;sarcomaai.db&nbsp;&nbsp;← state &amp; history
         </div>
-
-        {isNewDataset !== null && (
-          <div style={{ marginBottom: '1.25rem' }}>
-            <label style={labelStyle}>
-              {isNewDataset ? 'New STS Dataset Path' : 'Existing STS Dataset Path'}
-            </label>
-            <input
-              type="text"
-              value={stsDataset}
-              onChange={e => setStsDataset(e.target.value)}
-              placeholder={isNewDataset ? '/path/to/new/STS_Dataset' : '/path/to/existing/STS_Dataset'}
-              style={inputStyle}
-            />
-          </div>
-        )}
 
         {error && (
           <div style={{
@@ -169,12 +218,15 @@ export default function SetupWizard() {
         >
           {loading && (
             <span style={{
-              width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)',
-              borderTopColor: '#fff', borderRadius: '50%',
-              display: 'inline-block', animation: 'spin 0.7s linear infinite',
+              width: 16, height: 16,
+              border: '2px solid rgba(255,255,255,0.3)',
+              borderTopColor: '#fff',
+              borderRadius: '50%',
+              display: 'inline-block',
+              animation: 'spin 0.7s linear infinite',
             }} />
           )}
-          {loading ? 'Connecting...' : 'Confirm Setup'}
+          {loading ? 'Connecting...' : 'Open Workspace'}
         </button>
       </div>
 
@@ -204,31 +256,9 @@ const inputStyle = {
   color: 'var(--text-primary)',
   fontSize: 14,
   outline: 'none',
+  boxSizing: 'border-box',
 };
 
 const selectStyle = {
   ...inputStyle,
-  cursor: 'pointer',
-};
-
-const toggleBase = {
-  flex: 1,
-  padding: '0.5rem 0.75rem',
-  borderRadius: 6,
-  border: '1px solid var(--border)',
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: 'pointer',
-  transition: 'all 0.15s',
-};
-
-const toggleActive = {
-  background: 'var(--accent)',
-  color: '#fff',
-  borderColor: 'var(--accent)',
-};
-
-const toggleInactive = {
-  background: 'var(--bg-elevated)',
-  color: 'var(--text-secondary)',
 };
