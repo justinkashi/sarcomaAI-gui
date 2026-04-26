@@ -7,7 +7,6 @@ node_modules
 dist
 *.local
 /dist_venv
-/build
 
 # Editor directories and files
 .idea

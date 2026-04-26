@@ -232,6 +232,14 @@ class _QueueLogHandler(_logging.Handler):
         self.q.put({'line': self.format(record)})
 
 
+_PIPELINE_LOGGER_NAMES = [
+    '',  # root
+    'pipeline_new', 'config', 'series_select', 'ledger', 'csv_utils', 'models',
+    'dicom', 'dicom.dicom_anonymize', 'dicom.dicom_copy', 'dicom.dicom_tags', 'dicom.dicom_utils',
+    'imaging', 'imaging.imaging_normalize', 'imaging.imaging_io', 'imaging.imaging_utils',
+]
+
+
 def _run_pipeline_inprocess(log_q: _queue.Queue, result: dict) -> None:
     """
     Run pipeline_new.main() in the current process (needed inside PyInstaller
@@ -240,10 +248,16 @@ def _run_pipeline_inprocess(log_q: _queue.Queue, result: dict) -> None:
     by /api/setup.
     """
     handler = _QueueLogHandler(log_q)
-    root = _logging.getLogger()
-    prev_level = root.level
-    root.setLevel(_logging.INFO)
-    root.addHandler(handler)
+    # Attach handler + set INFO level on root AND every known pipeline logger
+    # so that PyInstaller-bundled Flask can't silently filter INFO records.
+    prev_states: list = []
+    for name in _PIPELINE_LOGGER_NAMES:
+        lg = _logging.getLogger(name)
+        prev_states.append((lg, lg.level, list(lg.handlers), lg.propagate))
+        lg.setLevel(_logging.INFO)
+        lg.addHandler(handler)
+        if name:  # non-root loggers: disable propagation to avoid duplicate lines
+            lg.propagate = False
     try:
         if PIPELINE_DIR not in sys.path:
             sys.path.insert(0, PIPELINE_DIR)
@@ -257,8 +271,10 @@ def _run_pipeline_inprocess(log_q: _queue.Queue, result: dict) -> None:
         log_q.put({'line': f'FATAL: {exc}'})
         result['returncode'] = 1
     finally:
-        root.setLevel(prev_level)
-        root.removeHandler(handler)
+        for lg, prev_level, prev_handlers, prev_propagate in prev_states:
+            lg.setLevel(prev_level)
+            lg.removeHandler(handler)
+            lg.propagate = prev_propagate
         log_q.put(None)  # sentinel — generator stops here
 
 
@@ -620,4 +636,4 @@ if __name__ == '__main__':
     is_bundled = hasattr(sys, '_MEIPASS')
     if is_bundled:
         threading.Thread(target=_open_browser, daemon=True).start()
-    app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False)
+    app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False, threaded=True)
