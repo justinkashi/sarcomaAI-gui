@@ -1,8 +1,7 @@
 dist
 dist_venv
-# PyInstaller intermediate build artifacts
 build/
-
+.claude
 # React
 frontend/node_modules/
 frontend/build/

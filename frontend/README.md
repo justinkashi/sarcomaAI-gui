@@ -1,3 +1,6 @@
+# NOTES FROM APR26 WHEN BUILDING THE .EXE WINDOWS APP
+- found a cerr compatibility issue on windows: The crash is at line 43 — getCERRScanArrayFromITK is trying to do coordinate indexing and something in pyCERR's Windows behavior differs from macOS. The fix is to bypass that CERR round-trip entirely: apply N4 correction and get the corrected array directly from SimpleITK, then normalize in numpy. Simpler and cross-platform:
+- 
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
