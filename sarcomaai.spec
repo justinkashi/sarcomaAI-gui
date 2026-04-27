@@ -96,6 +96,10 @@ hiddenimports = [
     'importlib',
     'sqlite3',
     'csv',
+
+    # Windows folder picker (used in /api/pick-folder on non-macOS)
+    'tkinter',
+    'tkinter.filedialog',
 ]
 
 # ---------------------------------------------------------------------------
@@ -147,7 +151,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='sarcomaai.icns',
+    icon='sarcomaai.ico' if sys.platform == 'win32' else 'sarcomaai.icns',
 )
 
 coll = COLLECT(

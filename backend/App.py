@@ -603,22 +603,28 @@ def export_ledger():
 @app.route('/api/pick-folder')
 def pick_folder():
     """
-    Opens a native macOS folder-picker dialog via osascript and returns the
-    selected path. The browser never touches the filesystem path — osascript
-    runs server-side and hands the real POSIX path back as JSON.
-    If the user cancels, returns {'path': null}.
+    Opens a native folder-picker dialog server-side and returns the selected path.
+    macOS: uses osascript. Windows/Linux: uses tkinter.filedialog.
+    Returns {'path': null} if the user cancels.
     """
-    import subprocess
     try:
-        proc = subprocess.run(
-            ['osascript', '-e', 'POSIX path of (choose folder)'],
-            capture_output=True, text=True, timeout=120
-        )
-        if proc.returncode != 0:
-            # User cancelled the dialog
-            return jsonify({'path': None})
-        path = proc.stdout.strip()
-        return jsonify({'path': path})
+        if sys.platform == 'darwin':
+            proc = subprocess.run(
+                ['osascript', '-e', 'POSIX path of (choose folder)'],
+                capture_output=True, text=True, timeout=120
+            )
+            if proc.returncode != 0:
+                return jsonify({'path': None})
+            return jsonify({'path': proc.stdout.strip()})
+        else:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            path = filedialog.askdirectory()
+            root.destroy()
+            return jsonify({'path': path or None})
     except Exception as e:
         return jsonify({'path': None, 'error': str(e)})
 
