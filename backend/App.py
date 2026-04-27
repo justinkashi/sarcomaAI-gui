@@ -394,7 +394,7 @@ def list_patients():
                         continue
                     try:
                         pydicom.dcmread(file_path, stop_before_pixels=True)
-                        relative_path = os.path.relpath(st_path, DATA_ROOT)
+                        relative_path = os.path.relpath(st_path, DATA_ROOT).replace('\\', '/')
                         if relative_path not in patients:
                             patients.append(relative_path)
                         break
