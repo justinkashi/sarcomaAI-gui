@@ -149,7 +149,16 @@ def anonymize_series(series_dir: Path, glob_pat: str = DEFAULT_GLOB) -> None:
         tmp = img.with_suffix(img.suffix + ".tmp")
         try:
             ds.save_as(tmp)
-            tmp.replace(img)
+            # Retry loop handles Windows Defender briefly locking newly-written files
+            for _attempt in range(5):
+                try:
+                    tmp.replace(img)
+                    break
+                except PermissionError:
+                    import time
+                    time.sleep(0.5)
+            else:
+                raise PermissionError(f"Could not replace {img} after retries")
         except Exception as exc:
             logger.error("Write failed for %s: %s", img, exc)
             tmp.unlink(missing_ok=True)
