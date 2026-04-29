@@ -1,214 +1,180 @@
 # SarcomaAI GUI
 
-A medical imaging workstation for selecting T1/T2 MRI series from DICOM datasets and running the SarcomaAI anonymization + NIfTI conversion pipeline. Built with React + Cornerstone3D (frontend) and Flask (backend).
+**A clinical desktop application for DICOM ingestion, MRI series review, and preprocessing — purpose-built to onboard cancer centers into a federated AI pipeline for soft tissue sarcoma prognosis.**
+
+[![Python](https://img.shields.io/badge/Python-3.12-blue)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-3.1-lightgrey)](https://flask.palletsprojects.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB)](https://reactjs.org/)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightblue)]()
+[![Published](https://img.shields.io/badge/NPJ%20Precision%20Oncology-2024-green)](https://doi.org/10.1038/s41698-024-00695-7)
+
+> Built as the clinical data pipeline layer for the SarcomaAI project — a multimodal neural network (C-Index 0.769 overall survival, 0.699 distant metastasis) published in *NPJ Precision Oncology* (2024) by Bozzo et al., MSKCC & McGill University. [Read the paper →](https://doi.org/10.1038/s41698-024-00695-7)
 
 ---
 
-## Prerequisites
+## Why this app exists
 
-You need three things installed before starting:
+Participating institutions in a federated learning study face a hard operational problem: their radiologists work in PACS systems, their data is stored as raw DICOM, and their IT departments cannot expose hospital systems to external pipelines. The SarcomaAI GUI solves this by running entirely **locally on the institution's own machine** — it ingests DICOM exports from the hospital, guides a radiologist through T1/T2 series selection on a proper MRI viewer, anonymizes all patient data, runs the preprocessing pipeline, and produces clean NIfTI files ready for federated model training. No data ever leaves the institution.
 
-### 1. Python 3.11+
-```bash
-python3 --version
-```
-If not installed: https://www.python.org/downloads/
-
-### 2. Node.js + npm
-```bash
-node --version
-npm --version
-```
-If not installed:
-```bash
-brew install node
-```
-Or download from https://nodejs.org
-
-### 3. A Python virtual environment with dependencies
-
-Create a venv and install required packages:
-```bash
-cd sarcomaAI-gui
-python3 -m venv venv
-source venv/bin/activate
-pip install flask flask-cors pydicom matplotlib SimpleITK
-pip install "pyCERR[napari] @ git+https://github.com/cerr/pyCERR"
-```
-
-> `pyCERR` is large and takes 5–10 minutes. It's required for N4 bias correction and NIfTI output. Without it the pipeline still runs but skips normalization and NIfTI export.
+The app is distributed as a double-clickable `.dmg` (macOS) or `.exe` (Windows) — no Python, no terminal, no dependencies for the end user.
 
 ---
 
-## Running the App
+## Workflow
 
-You need **two terminals open at the same time** — one for the backend, one for the frontend.
+### Step 1 — Workspace Setup
 
-### Terminal 1 — Backend
+![Setup](demo/setup.png)
 
-```bash
-cd sarcomaAI-gui/backend
-source ../venv/bin/activate      # activate your venv
-python App.py
+The first screen the clinician or research coordinator sees. They select their **institution** from a dropdown (pre-configured with all participating SarcomaAI centers) and point the app to a folder on their local machine. The app automatically creates a structured workspace:
+
+```
+sarcomaai_workspace/
+├── NEW_DICOMS/    ← drop new patient DICOM exports here
+├── processed/     ← anonymized NIfTI output (auto-managed)
+└── sarcomaai.db   ← local state, history, and audit trail
 ```
 
-You should see:
-```
-* Running on http://0.0.0.0:5050
-* Debug mode: on
-```
-
-### Terminal 2 — Frontend
-
-```bash
-cd sarcomaAI-gui/frontend
-npm install        # first time only — downloads dependencies (~2 min)
-npm start
-```
-
-The browser opens automatically at `http://localhost:3000`.
-
-> Both processes must stay running. If you close either terminal the app stops working.
+**Design reasoning:** Clinicians work across sessions. The workspace persists state in a local SQLite database so that T1/T2 selections, processing history, and patient status survive app restarts. The institution code is locked once set — preventing accidental re-labeling of data mid-study, which would corrupt the federated dataset.
 
 ---
 
-## Using the App
+### Step 2 — DICOM Import
 
-### Step 1 — Setup Wizard
+![Import](demo/setup2.png)
 
-The first screen asks for four things:
+The radiologist or coordinator points the app to their source DICOM folder — typically a manual export from the hospital PACS system. A native **OS folder picker dialog** opens (Finder on macOS, File Explorer on Windows), eliminating the need to type paths.
 
-| Field | What to enter |
+The import is **idempotent**: only patient folders not already in the workspace inbox are copied. Existing patients are automatically skipped with a log entry. This allows incremental onboarding — a center can import 10 patients today and 5 more next month without duplicating work.
+
+**Design reasoning:** Browsers cannot access native filesystem paths for security reasons — a standard drag-and-drop would be silently blocked. The folder picker is implemented server-side via `osascript` (macOS) / `tkinter` (Windows), so the path resolution happens in Python and is returned to the React frontend as a simple string. No browser security boundary is ever crossed.
+
+---
+
+### Step 3 — MRI Series Review & T1/T2 Selection
+
+![DICOM Viewer](demo/imageviewer.png)
+
+The core clinical screen. The left sidebar shows the full patient/study/series hierarchy from the DICOM inbox. Clicking a series renders the MRI slices in a full-resolution viewer with scroll support. The right panel shows:
+
+- **Series metadata** — description, slice count, slice thickness, acquisition date, modality
+- **Auto-suggest** — the app analyzes the series description string and automatically suggests whether the series is T1 or T2, reducing manual decision time
+- **Current assignment** — shows which series is currently marked as T1 and T2 for this patient
+- **Action buttons** — one-click T1/T2 assignment, with visual confirmation
+
+The top bar tracks progress across all patients: **"2/2 studies complete"** turns green when every patient has both a T1 and T2 assigned, unlocking the Run Pipeline button.
+
+**Design reasoning:** The SarcomaAI model requires specifically a **T1 post-contrast** and a **T2 fat-saturated** sequence for every patient. A typical DICOM export from a sarcoma patient contains 6–15 series (localizers, different contrast phases, different planes). Asking a non-radiologist to identify the correct two series by filename alone is error-prone. The viewer lets clinicians scroll through slices to visually confirm what they're selecting — the same workflow used in clinical PACS review, just stripped down to only what's needed.
+
+---
+
+### Step 4 — T1 & T2 Confirmed, Ready to Run
+
+![T1 T2 Selected](demo/t1t2selected.png)
+
+Once both T1 and T2 are assigned for all patients, the top bar shows **"All Complete"** and the **Run Pipeline** button activates. The right panel confirms both assignments are locked in before the pipeline starts, giving the user a final review checkpoint.
+
+**Design reasoning:** Preventing pipeline runs with incomplete selections avoids silent failures downstream — the preprocessing pipeline would produce bad NIfTI files if given the wrong series, corrupting the training data for all federated institutions. The explicit confirmation gate was added based on the real clinical workflow where series selection is a deliberate, reviewable step.
+
+---
+
+### Step 5 — Pipeline Execution with Live Logs
+
+![Pipeline Running](demo/pipelinerunning.png)
+
+The pipeline runs in the background and streams real-time log output directly into the viewer UI — no terminal window, no separate process. Each log line is timestamped and color-coded.
+
+Under the hood, the pipeline runs three stages per patient series:
+
+1. **DICOM anonymization** — all PHI/PII tags scrubbed from DICOM metadata (patient name, DOB, MRN, institution) per the project's anonymization field list
+2. **N4 bias field correction** — corrects MRI intensity non-uniformity using SimpleITK's implementation, essential for cross-scanner consistency in federated training
+3. **Z-score normalization + NIfTI conversion** — standardizes voxel intensity distributions and outputs a `128×128×128` NIfTI volume compatible with the model's image subnetwork
+
+**Design reasoning:** Log streaming is implemented using **Server-Sent Events (SSE)** from Flask to the React frontend via a persistent HTTP connection. The pipeline thread puts log records into a Python `queue.Queue` via a custom `logging.Handler` attached directly to each pipeline module's logger — bypassing Flask's root logger which would otherwise filter INFO-level messages in a bundled app. This architecture lets the UI stay responsive while a multi-hour pipeline runs in the background, which is critical for clinicians who need to continue working in the app.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SarcomaAI Desktop App                    │
+│  (PyInstaller bundle — no external dependencies for user)   │
+│                                                             │
+│  ┌──────────────┐   HTTP/SSE    ┌─────────────────────────┐ │
+│  │  React 18    │ ◄───────────► │  Flask 3.1 backend      │ │
+│  │  Frontend    │               │                         │ │
+│  │              │               │  /api/setup             │ │
+│  │  • DICOM     │               │  /api/pick-folder       │ │
+│  │    viewer    │               │  /api/import-stream     │ │
+│  │  • Patient   │               │  /api/patients          │ │
+│  │    sidebar   │               │  /api/series            │ │
+│  │  • Live logs │               │  /api/slice             │ │
+│  │  • T1/T2     │               │  /api/save-selection    │ │
+│  │    selector  │               │  /api/run-pipeline-     │ │
+│  └──────────────┘               │       stream (SSE)      │ │
+│                                 └──────────┬──────────────┘ │
+│                                            │                │
+│                                 ┌──────────▼──────────────┐ │
+│                                 │  python_pipeline/        │ │
+│                                 │  • dicom_anonymize.py   │ │
+│                                 │  • imaging_normalize.py │ │
+│                                 │  • series_select.py     │ │
+│                                 │  • pipeline_new.py      │ │
+│                                 └──────────┬──────────────┘ │
+│                                            │                │
+│                                 ┌──────────▼──────────────┐ │
+│                                 │  sarcomaai.db (SQLite)   │ │
+│                                 │  selections, history,    │ │
+│                                 │  audit trail             │ │
+│                                 └─────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+  processed/  →  anonymized NIfTI files
+                 ready for NVFlare federated training
+```
+
+---
+
+## Tech Stack
+
+| Component | Technology |
 |---|---|
-| **Institution** | Select your site from the dropdown |
-| **DICOM Folder Path** | Full absolute path to the folder containing your PA-numbered patient subfolders |
-| **Dataset type** | New dataset (first time) or Existing dataset (adding more patients) |
-| **STS Dataset Path** | Full absolute path to where the processed output should go |
-
-**What the DICOM folder should look like:**
-```
-/your/path/DICOM/
-    PA000001/
-        ST000001/
-            SE000001/   ← individual DICOM files live here
-            SE000002/
-    PA000002/
-        ...
-```
-
-The path you enter should point to the `DICOM/` folder itself (the one containing PA-numbered subfolders).
-
-Click **Confirm Setup**. The backend validates that both paths exist on disk before proceeding. If you see a red error, check that the paths are correct and the folder exists.
-
-> Your paths are saved in the browser (localStorage) so the wizard pre-fills them on your next visit.
+| Frontend | React 18, custom CSS, Server-Sent Events |
+| Backend | Python 3.12, Flask 3.1, SQLite |
+| DICOM | pydicom 3.0 |
+| MRI preprocessing | SimpleITK (N4 bias correction), pyCERR, scipy, nibabel, scikit-image |
+| Desktop packaging | PyInstaller 6 — macOS `.app` + `.dmg` via `create-dmg`, Windows `.exe` |
+| OS folder picker | `osascript` (macOS), `tkinter` (Windows) |
+| Real-time logging | Python `logging`, `queue.Queue`, Flask SSE |
 
 ---
 
-### Step 2 — Select T1 and T2 for Each Patient
+## Building from Source
 
-The main screen has three panels:
+**Prerequisites:** Python 3.12, Node.js 18+, `create-dmg` (macOS only)
 
-**Left — Patient Sidebar**
-- Lists all patients found in your DICOM folder
-- Status dots: 🔴 = nothing selected, 🟡 = only T1 or T2, 🟢 = both done
-- Click a patient to expand their studies and series
-- Click a series to load it in the viewer
+```bash
+# 1. Set up the Python environment
+python3.12 -m venv dist_venv
+dist_venv/bin/pip install flask flask-cors pydicom matplotlib SimpleITK \
+  scipy h5py pandas nibabel scikit-learn scikit-image PyWavelets \
+  shapelysmooth itk pyinstaller \
+  git+https://github.com/google-deepmind/surface-distance.git \
+  git+https://github.com/cerr/pyCERR@d70e1d84be44693e9eafc6d6e8316b703a24ca6d
 
-**Center — DICOM Viewer**
-- Displays the selected series using Cornerstone3D (native DICOM rendering)
-- **Left drag** — adjust Window/Level (brightness/contrast)
-- **Right drag** — zoom
-- **Middle drag** — pan
-- **Scroll wheel** — move through slices
-
-**Right — Series Info**
-- Shows metadata: series description, slice count, thickness, date, modality
-- **Auto-suggest**: if the series description contains keywords like `T1`, `VIBE`, `T2`, `SPACE` etc., a suggestion badge appears
-- Shows current T1/T2 assignment for this patient
-- **Mark as T1** / **Mark as T2** buttons to tag the current series
-
-**Keyboard shortcuts:**
-| Key | Action |
-|---|---|
-| `1` | Mark current series as T1 |
-| `2` | Mark current series as T2 |
-| `→` | Next series |
-| `↓` | Next patient |
-
-Selections save automatically after each click — a **Saved ✓** indicator flashes in the top-right of the Series Info panel. You can close the app and resume later without losing progress.
-
-Once you mark both T1 and T2 for a patient, the app automatically advances to the next incomplete patient.
-
----
-
-### Step 3 — Run the Pipeline
-
-When all patients have both T1 and T2 selected, the **Run Pipeline** button in the top bar turns green.
-
-Click it → confirm the prompt → the pipeline runs and a log panel slides up from the bottom showing live output.
-
-**What the pipeline does:**
-1. Copies selected DICOM series into the STS dataset folder with anonymized IDs (`PA######`)
-2. Extracts the MRN and injects a traceability name (`sts.INSTITUTION.######.t1/t2`) into the DICOM header
-3. Strips all 36 sensitive DICOM tags (patient name, dates, institution, etc.)
-4. Runs N4 bias field correction and Z-score normalization
-5. Exports a `.nii` NIfTI file per series
-6. Appends a row to `ledger.csv`
-
-**Output folder structure:**
-```
-STS_Dataset/
-    DICOM/
-        PA000001/ST000001/SE000003/    ← anonymized DICOM files
-    sts.002/
-        sts.002.000001/
-            sts.002.000001.t1.nii      ← normalized NIfTI
-            sts.002.000001.t2.nii
-    ledger.csv                         ← links PA###### → real MRN
+# 2. Build (macOS)
+./build_app.sh
+# Output: dist/SarcomaAI.app  +  dist/SarcomaAI.dmg
 ```
 
-> `ledger.csv` is the only file linking anonymized IDs back to real patient MRNs. Keep it secure and off shared drives.
-
 ---
 
-## Stopping
+## Project Context
 
-`Ctrl+C` in each terminal.
+This GUI is the data ingestion layer for the **SarcomaAI federated learning initiative** — a multi-institution collaboration between McGill University Health Centre (MUHC) and Memorial Sloan Kettering Cancer Center (MSKCC) to build the first end-to-end multimodal AI model for soft tissue sarcoma prognosis. The underlying model is published:
 
----
+> Bozzo et al. *"A multimodal neural network with gradient blending improves predictions of survival and metastasis in sarcoma."* NPJ Precision Oncology, 2024. [https://doi.org/10.1038/s41698-024-00695-7](https://doi.org/10.1038/s41698-024-00695-7)
 
-## Troubleshooting
-
-**"Confirm Setup" gives an error**
-- Check that the DICOM folder path exists and contains PA-numbered subfolders
-- Check that the STS dataset path exists (create the folder first if needed)
-- Make sure the backend terminal is running
-
-**No patients appear after setup**
-- The DICOM folder must contain subfolders named like `PA000001/ST000001/SE000001/`
-- Each SE folder must contain valid DICOM files (not `.dcm` extension required, but must be DICOM format)
-
-**Viewer shows black / no image**
-- Click a series in the left sidebar first — the viewer only loads when a series is selected
-- If the image still doesn't appear, check the browser console (F12) for errors
-
-**Pipeline fails or produces no NIfTI files**
-- Make sure `SimpleITK` and `pyCERR` are installed in your venv
-- Check the log panel for the specific error — it shows full pipeline output
-
-**Backend crashes on startup**
-- Make sure your venv is activated (`source venv/bin/activate`)
-- Make sure all packages are installed (`pip install flask flask-cors pydicom matplotlib`)
-
-**`npm start` fails**
-- Run `npm install` first inside the `frontend/` folder
-- Make sure Node.js is installed (`node --version`)
-
----
-
-## Notes for Developers
-
-- The backend must be restarted if it crashes — path config is held in memory, not persisted to disk between restarts. Re-running the setup wizard after restart restores it.
-- `selections.csv` is saved inside your DICOM folder and persists across restarts.
-- The `python_pipeline/runtime_config.json` file is written by the backend at setup time and read by the pipeline at run time. Do not edit it manually.
-- Docker support is planned (Jonathan) — this will replace the two-terminal startup with a single double-click launcher.
+**Built by Justin Kashi** — McGill University (MSc Biomedical Engineering), as part of the SarcomaAI project team.
