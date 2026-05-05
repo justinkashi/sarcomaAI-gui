@@ -36,7 +36,7 @@ pip install flask flask-cors pydicom matplotlib SimpleITK
 pip install "pyCERR[napari] @ git+https://github.com/cerr/pyCERR"
 ```
 
-> `pyCERR` is large and takes 5–10 minutes. It's required for N4 bias correction and NIfTI output. Without it the pipeline still runs but skips normalization and NIfTI export.
+> `pyCERR` is large and takes 5–10 minutes. It's required for N4 bias correction and NIfTI output. Without it the pipeline still runs but skips normalization and NIfTI export. Python 3.14 is brand new and most packages with compiled C extensions (like napari's dependencies — numpy, vispy, Qt bindings) don't have wheels built for 3.14 yet. So pip tries to compile from source, fails, and the whole install breaks. 3.11 and 3.12 have mature wheel availability for everything napari needs — so it installs cleanly.
 
 ---
 

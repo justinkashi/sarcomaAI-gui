@@ -193,7 +193,7 @@ build_app.bat
 :: Output: dist\SarcomaAI\SarcomaAI.exe
 ```
 
-> **Note on pyCERR:** You need python 3.11 or 3.12 to install this! Works both on windows and mac 
+> **Note on pyCERR:** Python 3.14 is brand new and most packages with compiled C extensions (like napari's dependencies — numpy, vispy, Qt bindings) don't have wheels built for 3.14 yet. So pip tries to compile from source, fails, and the whole install breaks. 3.11 and 3.12 have mature wheel availability for everything napari needs — so it installs cleanly.
 
 ---
 
