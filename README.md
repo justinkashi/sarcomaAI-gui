@@ -153,7 +153,13 @@ Under the hood, the pipeline runs three stages per patient series:
 
 ## Building from Source
 
-**Prerequisites:** Python 3.12, Node.js 18+, `create-dmg` (macOS only)
+**Prerequisites:** Python 3.12, Node.js 18+
+
+---
+
+### macOS
+
+**Additional prerequisite:** `create-dmg` — `brew install create-dmg`
 
 ```bash
 # 1. Set up the Python environment
@@ -164,10 +170,30 @@ dist_venv/bin/pip install flask flask-cors pydicom matplotlib SimpleITK \
   git+https://github.com/google-deepmind/surface-distance.git \
   git+https://github.com/cerr/pyCERR@d70e1d84be44693e9eafc6d6e8316b703a24ca6d
 
-# 2. Build (macOS)
+# 2. Build
 ./build_app.sh
 # Output: dist/SarcomaAI.app  +  dist/SarcomaAI.dmg
 ```
+
+---
+
+### Windows
+
+```bat
+:: 1. Set up the Python environment
+python -m venv dist_venv
+dist_venv\Scripts\pip install flask flask-cors pydicom matplotlib SimpleITK ^
+  scipy h5py pandas nibabel scikit-learn scikit-image PyWavelets ^
+  shapelysmooth itk pyinstaller ^
+  git+https://github.com/google-deepmind/surface-distance.git ^
+  git+https://github.com/cerr/pyCERR@d70e1d84be44693e9eafc6d6e8316b703a24ca6d
+
+:: 2. Build
+build_app.bat
+:: Output: dist\SarcomaAI\SarcomaAI.exe
+```
+
+> **Note on pyCERR:** You need python 3.11 or 3.12 to install this! Works both on windows and mac 
 
 ---
 
