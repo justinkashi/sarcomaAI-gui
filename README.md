@@ -12,7 +12,7 @@
 
 ---
 
-https://github.com/user-attachments/assets/ab400472-c718-4118-a788-6e7b50cd1b2a
+<video autoplay loop muted playsinline src="https://github.com/user-attachments/assets/ab400472-c718-4118-a788-6e7b50cd1b2a"></video>
 
 ---
 
