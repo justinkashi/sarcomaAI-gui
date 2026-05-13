@@ -12,11 +12,8 @@
 
 ---
 
-<video src="https://github.com/user-attachments/assets/ab400472-c718-4118-a788-6e7b50cd1b2a"
-  controls
-  width="100%"
-  style="border-radius:8px">
-</video>
+https://github.com/user-attachments/assets/ab400472-c718-4118-a788-6e7b50cd1b2a
+
 ---
 
 ## Why this app exists
