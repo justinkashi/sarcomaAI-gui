@@ -12,6 +12,13 @@
 
 ---
 
+<video src="https://github.com/user-attachments/assets/ab400472-c718-4118-a788-6e7b50cd1b2a"
+  controls
+  width="100%"
+  style="border-radius:8px">
+</video>
+---
+
 ## Why this app exists
 
 Participating institutions in a federated learning study face a hard operational problem: their radiologists work in PACS systems, their data is stored as raw DICOM, and their IT departments cannot expose hospital systems to external pipelines. The SarcomaAI GUI solves this by running entirely **locally on the institution's own machine** — it ingests DICOM exports from the hospital, guides a radiologist through T1/T2 series selection on a proper MRI viewer, anonymizes all patient data, runs the preprocessing pipeline, and produces clean NIfTI files ready for federated model training. No data ever leaves the institution.

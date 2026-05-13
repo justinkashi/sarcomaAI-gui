@@ -5,7 +5,7 @@ build/
 # React
 frontend/node_modules/
 frontend/build/
-
+.understand-anything
 # Python
 __pycache__/
 *.pyc
