@@ -652,21 +652,37 @@ def serve_react(path):
 PORT = int(os.environ.get('SARCOMAAI_PORT', 5050))
 
 
-def _open_browser():
-    """Poll until Flask is accepting connections, then open the browser."""
+def _wait_for_flask():
+    """Poll until Flask is accepting connections."""
     import time
     import urllib.request
-    for _ in range(60):          # wait up to 30 seconds
+    for _ in range(60):
         try:
             urllib.request.urlopen(f'http://localhost:{PORT}/', timeout=1)
-            break
+            return
         except Exception:
             time.sleep(0.5)
-    webbrowser.open(f'http://localhost:{PORT}')
+
+
+def _run_flask():
+    app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False, threaded=True)
 
 
 if __name__ == '__main__':
-    is_bundled = hasattr(sys, '_MEIPASS')
-    if is_bundled:
-        threading.Thread(target=_open_browser, daemon=True).start()
-    app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False, threaded=True)
+    import webview
+
+    # Flask runs in background — main thread must stay free for the macOS window loop
+    threading.Thread(target=_run_flask, daemon=True).start()
+    _wait_for_flask()
+
+    # Native window on the main thread — satisfies macOS NSApplication requirement
+    # This gives proper dock presence, Cmd+Q, and active dot
+    webview.create_window(
+        'SarcomaAI',
+        f'http://localhost:{PORT}',
+        width=1440,
+        height=900,
+        min_size=(1024, 700),
+        resizable=True,
+    )
+    webview.start()

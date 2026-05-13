@@ -6,10 +6,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sts-pipeline"
 version = "0.1.0"
-description = "Crash‑tolerant DICOM → NIfTI pipeline with pyCERR support"
+description = "Crash‑tolerant DICOM → NIfTI pipeline"
 requires-python = ">=3.11"
 
 # Core runtime dependencies
 dependencies = [
-    "pyCERR[napari] @ git+https://github.com/cerr/pyCERR"
+    "SimpleITK",
+    "pydicom",
+    "nibabel",
+    "numpy",
+    "pandas",
 ]

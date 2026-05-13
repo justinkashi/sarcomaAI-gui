@@ -63,31 +63,9 @@ hiddenimports = [
     'SimpleITK',
     'SimpleITK.SimpleITK',
 
-    # pyCERR and all its declared dependencies
-    'cerr',
-    'cerr.plan_container',
-    'cerr.dataclasses',
-    'cerr.dataclasses.scan',
     'nibabel',
     'nibabel.loadsave',
-    'scipy',
-    'scipy.ndimage',
-    'scipy.interpolate',
-    'scipy.io',
-    'h5py',
     'pandas',
-    'skimage',
-    'skimage.transform',
-    'skimage.filters',
-    'sklearn',
-    'sklearn.preprocessing',
-    'pywt',
-    'shapely',
-    'shapelysmooth',
-    'surface_distance',
-    'itk',
-    'networkx',
-    'imageio',
 
     # Standard library extras
     'queue',
@@ -96,6 +74,11 @@ hiddenimports = [
     'importlib',
     'sqlite3',
     'csv',
+
+    # Native window (replaces webbrowser.open)
+    'webview',
+    'webview.platforms.cocoa',
+    'webview.platforms.winforms',
 
     # Windows folder picker (used in /api/pick-folder on non-macOS)
     'tkinter',
@@ -107,24 +90,23 @@ hiddenimports = [
 # ---------------------------------------------------------------------------
 from PyInstaller.utils.hooks import collect_all as _collect_all
 
+_wv_datas, _wv_bins, _wv_hidden = _collect_all('webview')
+
 _sitk_datas, _sitk_bins, _sitk_hidden = _collect_all('SimpleITK')
+datas += _wv_datas
 datas += _sitk_datas
+hiddenimports += _wv_hidden
 hiddenimports += _sitk_hidden
 
-_cerr_datas, _cerr_bins, _cerr_hidden = _collect_all('cerr')
-datas += _cerr_datas
-hiddenimports += _cerr_hidden
-
-for _pkg in ('nibabel', 'h5py', 'scipy', 'skimage', 'sklearn', 'pandas', 'itk'):
+for _pkg in ('nibabel', 'pandas'):
     _d, _b, _h = _collect_all(_pkg)
     datas += _d
-    _cerr_bins += _b
     hiddenimports += _h
 
 a = Analysis(
     [str(BACKEND / 'App.py')],
     pathex=[str(BACKEND)],
-    binaries=_sitk_bins + _cerr_bins,
+    binaries=_wv_bins + _sitk_bins,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

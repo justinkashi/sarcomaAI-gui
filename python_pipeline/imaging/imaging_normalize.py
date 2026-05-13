@@ -10,25 +10,23 @@ def bias_correct_and_standardize(series_dir: Path) -> sitk.Image | None:
     """
     Perform N4 bias field correction and Z-score normalization on a DICOM series.
 
-    Uses CERR to load the series and extract the scan array. Applies:
+    Loads the DICOM series with SimpleITK's native series reader. Applies:
     1. N4 bias field correction (SimpleITK).
     2. Percentile-based intensity clipping (0.5-99.5%).
     3. Z-score normalization (mean=0, std=1).
-    
+
     Returns:
         A SimpleITK.Image with corrected and normalized data, or None on failure.
     """
     try:
-        from cerr import plan_container as pc
-        from cerr.dataclasses import scan as scn
-    except ImportError as exc:  # pragma: no cover
-        logger.error("CERR not available: %s", exc)
-        return None
-
-    try:
-        # Load DICOM series using CERR
-        planC = pc.loadDcmDir(str(series_dir))
-        itk_orig = planC.scan[0].getSitkImage()
+        # Load DICOM series using SimpleITK's native reader (no pyCERR needed)
+        dicom_files = sitk.ImageSeriesReader.GetGDCMSeriesFileNames(str(series_dir))
+        if not dicom_files:
+            logger.error("No DICOM files found in %s", series_dir)
+            return None
+        reader = sitk.ImageSeriesReader()
+        reader.SetFileNames(dicom_files)
+        itk_orig = reader.Execute()
 
         logger.info("N4 bias correction on %s", series_dir.name)
 
