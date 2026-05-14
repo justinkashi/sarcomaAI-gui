@@ -91,6 +91,8 @@ Different PACS vendors (GE Centricity, Philips IntelliSpace, Siemens Syngo, Inte
 
 Additionally, some institutions use IntelePACS's built-in de-identification service. These pre-processed files may have a different tag schema than raw exports, potentially causing the pipeline to behave unexpectedly.
 
+A related gap: the two participating institutions (MUHC, MSKCC) are hardcoded as dropdown options in `SetupWizard.jsx`. Adding Institution #3 currently requires a developer to edit the component and rebuild and redistribute the app. Institution codes and display names should be loaded from a backend config endpoint before scaling to additional sites.
+
 **Proposed fix:**
 The per-institution field override (described in 2.1) addresses this partially. Additionally, an onboarding QC step should be defined: before processing any real patients at a new site, run the anonymization audit (2.1) on a small set of test files and review the private tag report with the site coordinator. This becomes part of the standard site onboarding checklist.
 
@@ -164,6 +166,41 @@ This separates the Python package (small, pip-installable) from the bundled app 
 `App.py` is ~400 lines and growing. It contains Flask route definitions, pipeline orchestration, SQLite helpers, DICOM file serving, SSE streaming, folder picker integration, and startup logic in one file. As MCP servers, per-institution configuration, and additional pipeline steps are added, this file will become difficult to maintain.
 
 **Proposed fix:** Standard Flask application factory pattern with blueprints. Routes organized by domain (`routes/dicom.py`, `routes/pipeline.py`, `routes/config.py`). This is a low-urgency refactor that can be done incrementally alongside other changes.
+
+---
+
+### 2.7 Pipeline Error Recovery — LOW RISK (Reliability)
+
+**Severity: P3 — Affects pipeline reliability per run**
+
+**The problem:**
+`pipeline_new.py` processes series sequentially with no per-series isolation. If an exception is raised mid-run (corrupted DICOM file, unexpected series geometry, SimpleITK failure), the entire pipeline halts. All series scheduled after the failing one are not processed in that run, with no indication to the user distinguishing series that succeeded from series that were never attempted.
+
+**Consequences:**
+- A single bad DICOM file can silently leave a batch of patients unprocessed.
+- The user must re-run the pipeline to recover. Idempotency mitigates duplicate processing but does not surface which series need re-processing.
+- There is no per-series error log entry that distinguishes `ERROR` from `SKIPPED`.
+
+**Proposed fix:** Wrap each series' processing block in a try/except. On failure, write the series to the audit log as `ERROR` with the exception traceback, then continue to the next series. Emit a run summary at the end enumerating successful, failed, and skipped series counts.
+
+**Tradeoffs:** Error recovery adds complexity to pipeline control flow. The try/except scope must be carefully bounded — catching too broadly can mask bugs that should surface and halt.
+
+---
+
+### 2.8 No Automated Test Suite — LOW RISK (Engineering Debt)
+
+**Severity: P3 — Affects developer confidence on refactors**
+
+The application has no automated tests — no unit tests for pipeline logic, no integration tests for Flask endpoints, and no frontend component tests. Validation is manual QA against the specifications in `SYSTEM_DESIGN.md` and `USER-INSTRUCTIONS.md`.
+
+**The risk:** Manageable at two institutions with a small team. As the codebase grows (MCP servers, per-institution configuration, distribution restructure), changes to pipeline or backend carry increasing risk of silent regressions not caught until a clinical user runs a pipeline.
+
+**Proposed fix:** A minimal test layer targeting the highest-risk paths:
+- Unit tests for `dicom_anonymize.py`: verify each sensitive field is scrubbed correctly on a synthetic `pydicom.Dataset()`
+- Unit tests for `imaging_normalize.py`: verify output statistics (mean ≈ 0, std ≈ 1) on a known synthetic volume
+- Integration tests for Flask API endpoints using Flask's built-in test client
+
+**Tradeoffs:** Writing tests retroactively for scientific imaging code requires realistic test fixtures (synthetic DICOM files with known tag values). These are non-trivial but feasible with `pydicom.Dataset()`. This is P3 but becomes urgent before any major refactor — in particular the package restructure in 2.5, where import path changes carry pipeline-breakage risk without a regression baseline.
 
 ---
 
@@ -257,7 +294,7 @@ Model Context Protocol (MCP) servers expose the application's data to Claude, en
 
 ## 5. What Is Not Being Changed
 
-- React frontend components and Cornerstone3D integration — stable, no changes planned
+- React frontend components and Cornerstone3D integration — stable, no changes planned. Note: the `/api/slice` endpoint renders each DICOM slice as a PNG via matplotlib before sending to the frontend. This bypasses Cornerstone3D's native windowing and histogram capabilities — window/level adjustment, magnification, and diagnostic-grade rendering are not available. This is an accepted limitation for the series-selection use case and is not in scope for this report.
 - Python pipeline logic (anonymization rules, N4 bias correction, NIfTI normalization) — correct and complete
 - SQLite schema — no changes needed
 - Flask route API contract — no breaking changes in any of the above proposals

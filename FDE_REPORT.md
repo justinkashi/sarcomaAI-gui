@@ -78,6 +78,8 @@ Every hospital runs a different imaging system. Philips, Siemens, GE, and Intele
 
 There is currently no standard process for checking this before a new site goes live. We are proposing a formal onboarding checklist: before any real patient data is processed at a new site, run the audit tool on a small test batch and review the findings with the local coordinator. This becomes the standard step before any institution is considered active.
 
+There is also a code-level barrier: the two institutions currently participating (MUHC and MSKCC) are hardcoded directly into the application's setup screen. Adding a third institution requires a developer to modify the source code and rebuild and redistribute the application to all existing sites. This needs to be made configurable before we can onboard sites independently without developer involvement in each one.
+
 ---
 
 ### 2.2 The App Does Not Behave Like a Proper Mac App
@@ -105,6 +107,32 @@ First, many hospital IT departments have policies that restrict the installation
 Second, every time we update the app, the site must download and reinstall the full 500MB package. This creates friction for updates and means sites may delay updating, leaving them on older versions with unresolved issues.
 
 One library (`pyCERR`) that we bundle contributes approximately 200MB but is only used for one specific function that can be replaced with a lighter alternative. Removing it roughly halves the installer size. This is the immediate fix. A longer-term alternative is distributing the application as a standard software package that installs via a single command in the terminal — a distribution method that is more familiar to IT departments and makes updates trivial.
+
+---
+
+### 2.4 The Pipeline Stops When It Hits a Problem
+
+When the pipeline runs, it processes patients one by one in sequence. If it encounters a problem with one patient — a corrupted scan, an unexpected file format, a processing error — it stops entirely. Every patient scheduled after the failed one is not processed in that run, and there is no clear indication of which patients succeeded and which were not reached.
+
+The practical effect is that a coordinator may believe the pipeline ran successfully because it finished without an obvious error message, while a portion of patients were silently skipped. Recovering requires re-running the pipeline and manually checking which patients were actually processed.
+
+This is not a data safety issue, but it creates hidden gaps in the processed dataset that require human follow-up to detect. The fix is to make the pipeline continue past individual failures rather than stopping, and to produce a clear per-patient success/failure summary at the end of each run.
+
+---
+
+### 2.5 The DICOM Viewer Is Not a Clinical Viewer
+
+The viewer built into the app allows coordinators to browse MRI scans and assign T1 and T2 labels. It is functional for this purpose. However, it is not a full clinical viewer — it does not support window/level adjustment (the brightness and contrast control that radiologists use to inspect different tissue types), zoom beyond the default, or diagnostic-grade image rendering.
+
+This is intentional and acceptable for the current use case: the coordinator is selecting series, not making clinical decisions. However, it means the viewer is not suitable for any workflow that requires clinical image inspection, and should not be presented to sites as a replacement for their existing PACS viewer.
+
+---
+
+### 2.6 The Application Has No Automated Safety Net
+
+Every time a change is made to the application — a bug fix, a new feature, a compatibility update — it is validated manually by testing the workflow by hand. There are no automated checks that run after a change to confirm that nothing was broken.
+
+This is manageable today with a small team and two institutions. As the application grows — adding new pipeline steps, per-institution configuration, and the Claude integration described in Section 3 — the risk of an update silently breaking something that is only discovered when a clinical user runs a pipeline increases. The right time to build automated checks is before the complexity grows, not after a problem occurs.
 
 ---
 
