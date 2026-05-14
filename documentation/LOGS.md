@@ -1,3 +1,8 @@
+May 14
+- waiting on histopathology data
+- Windows.exe needs a signature, digital certification? -Rukun 
+
+
 May 13
 - slow boot-up 
 - recording the demo mp4 on screenkite 
