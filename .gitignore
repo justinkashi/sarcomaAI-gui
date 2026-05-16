@@ -1,18 +1,25 @@
-dist
-dist_venv
-build/
-.claude
+#distro
+dist 
+#venv 
+dist_venv 
+#intermediate files during build 
+build/ 
+
+
 # React
 frontend/node_modules/
 frontend/build/
 .understand-anything
+
 # Python
 __pycache__/
+.pytest_cache
+
 *.pyc
 *.pyo
-
 # Runtime-generated config (written by the app at runtime, not source)
 python_pipeline/runtime_config.json
 
 # macOS junk
 .DS_Store
+.claude 

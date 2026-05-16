@@ -8,7 +8,6 @@ import io
 import threading
 import webbrowser
 import pydicom
-import matplotlib.pyplot as plt
 from pathlib import Path
 from pydicom.errors import InvalidDicomError
 
@@ -45,6 +44,16 @@ CORS(app)
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _set_force_rerun(value: bool) -> None:
+    """Patch force_rerun in runtime_config.json without touching other keys."""
+    cfg = {}
+    p = Path(RUNTIME_CONFIG)
+    if p.exists():
+        cfg = _json.loads(p.read_text())
+    cfg['force_rerun'] = value
+    p.write_text(_json.dumps(cfg, indent=2))
+
 
 def _get_valid_dicom_files(series_path):
     result = []
@@ -282,10 +291,40 @@ def _run_pipeline_inprocess(log_q: _queue.Queue, result: dict) -> None:
 # Pipeline routes
 # ---------------------------------------------------------------------------
 
+@app.route('/api/reset-run', methods=['POST'])
+def reset_run():
+    """
+    Full pipeline reset:
+    1. Delete processed/ (anonymized DICOM copies)
+    2. Delete sts.{institution}/ (NIfTI output files)
+    3. Reset all selections to 'pending' in the DB
+    """
+    if DATA_ROOT is None:
+        return abort(400, "Not configured")
+
+    # 1. Wipe anonymized DICOM copies
+    if STS_DATASET and STS_DATASET.exists():
+        shutil.rmtree(STS_DATASET)
+        STS_DATASET.mkdir(parents=True, exist_ok=True)
+
+    # 2. Wipe NIfTI output folder
+    nifti_root = WORKSPACE / f"sts.{INSTITUTION}"
+    if nifti_root.exists():
+        shutil.rmtree(nifti_root)
+
+    # 3. Reset DB status so pipeline re-queues everyone
+    _db.reset_all_selections(DB_PATH)
+
+    return jsonify({'ok': True})
+
+
 @app.route('/api/run-pipeline', methods=['POST'])
 def run_pipeline():
     if DATA_ROOT is None:
         return abort(400, "Not configured. Call /api/setup first.")
+
+    force = request.args.get('force', 'false').lower() == 'true'
+    _set_force_rerun(force)
 
     pending = _db.get_pending_pairs(DB_PATH)
     _db.write_selections_csv(DB_PATH, Path(SELECTION_FILE))
@@ -317,6 +356,9 @@ def run_pipeline():
 def run_pipeline_stream():
     if DATA_ROOT is None:
         return abort(400, "Not configured")
+
+    force = request.args.get('force', 'false').lower() == 'true'
+    _set_force_rerun(force)
 
     pending = _db.get_pending_pairs(DB_PATH)
     _db.write_selections_csv(DB_PATH, Path(SELECTION_FILE))
@@ -352,6 +394,7 @@ def run_pipeline_stream():
             result['returncode'] = process.returncode
 
         _db.ingest_run_output(STS_DATASET, DB_PATH)
+        _set_force_rerun(False)
         rc = result.get('returncode', 1)
         if rc == 0 and pending:
             _db.mark_batch_processed(DB_PATH, pending)
@@ -424,36 +467,6 @@ def get_series():
 # ---------------------------------------------------------------------------
 # DICOM serving
 # ---------------------------------------------------------------------------
-
-@app.route('/api/slice')
-def get_slice():
-    if DATA_ROOT is None:
-        return abort(400, "Not configured. Call /api/setup first.")
-
-    patient   = request.args.get('patient')
-    series    = request.args.get('series')
-    slice_idx = int(request.args.get('slice', 0))
-
-    series_path = os.path.join(DATA_ROOT, patient, series)
-    if not os.path.isdir(series_path):
-        return abort(404, "Series not found")
-
-    valid_files = _get_valid_dicom_files(series_path)
-    if not valid_files:
-        return abort(404, "No valid DICOM files in this series")
-    if slice_idx < 0 or slice_idx >= len(valid_files):
-        return abort(400, "Slice index out of bounds")
-
-    try:
-        dcm = pydicom.dcmread(os.path.join(series_path, valid_files[slice_idx]))
-    except InvalidDicomError:
-        return abort(415, "Invalid DICOM at this slice")
-
-    buf = io.BytesIO()
-    matplotlib = __import__('matplotlib.pyplot', fromlist=['imsave'])
-    matplotlib.imsave(buf, dcm.pixel_array, cmap='gray', format='png')
-    buf.seek(0)
-    return send_file(buf, mimetype='image/png')
 
 
 @app.route('/api/max-slice')

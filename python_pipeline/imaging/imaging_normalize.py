@@ -30,10 +30,13 @@ def bias_correct_and_standardize(series_dir: Path) -> sitk.Image | None:
 
         logger.info("N4 bias correction on %s", series_dir.name)
 
+        # N4 requires float input; DICOM pixel data is uint16
+        itk_float = sitk.Cast(itk_orig, sitk.sitkFloat32)
+
         # Apply N4 bias correction — get corrected image directly from SimpleITK
         corrector = sitk.N4BiasFieldCorrectionImageFilter()
         corrector.SetMaximumNumberOfIterations([20, 20, 10])
-        corrected_itk = corrector.Execute(itk_orig)
+        corrected_itk = corrector.Execute(itk_float)
 
         # Work entirely in numpy from here — avoids CERR coordinate round-trip
         corrected = sitk.GetArrayFromImage(corrected_itk).astype(np.float64)

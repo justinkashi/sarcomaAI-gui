@@ -1,12 +1,43 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 
 const API = 'http://localhost:5050';
+const MIN_H = 120;
+const MAX_H = window.innerHeight * 0.85;
+const DEFAULT_H = window.innerHeight * 0.4;
 
 export default function PipelineStatus() {
-  const { pipelineState, setPipelineState, pipelineLog } = useApp();
+  const { pipelineState, setPipelineState, pipelineLog, startPipeline } = useApp();
   const [exporting,    setExporting]    = useState(false);
-  const [exportResult, setExportResult] = useState(''); // filename on success, error msg on fail
+  const [exportResult, setExportResult] = useState('');
+  const [panelHeight,  setPanelHeight]  = useState(DEFAULT_H);
+  const dragging = useRef(false);
+
+  const onMouseDown = useCallback((e) => {
+    e.preventDefault();
+    dragging.current = true;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!dragging.current) return;
+      const h = window.innerHeight - e.clientY;
+      setPanelHeight(Math.min(MAX_H, Math.max(MIN_H, h)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
 
   const exportLedger = async () => {
     setExporting(true);
@@ -54,13 +85,23 @@ export default function PipelineStatus() {
       bottom: 0,
       left: 0,
       right: 0,
-      height: '40vh',
+      height: panelHeight,
       background: 'var(--bg-surface)',
       borderTop: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
       zIndex: 500,
     }}>
+      {/* drag handle */}
+      <div
+        onMouseDown={onMouseDown}
+        style={{
+          height: 6,
+          cursor: 'ns-resize',
+          background: 'transparent',
+          flexShrink: 0,
+        }}
+      />
       <div style={{
         display: 'flex',
         alignItems: 'center',

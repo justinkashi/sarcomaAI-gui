@@ -55,9 +55,6 @@ hiddenimports = [
     # DICOM / imaging
     'pydicom',
     'pydicom.encoders',
-    'matplotlib',
-    'matplotlib.pyplot',
-    'matplotlib.backends.backend_agg',
 
     # SimpleITK (pulled in by imaging_normalize)
     'SimpleITK',
@@ -65,7 +62,6 @@ hiddenimports = [
 
     'nibabel',
     'nibabel.loadsave',
-    'pandas',
 
     # Standard library extras
     'queue',
@@ -98,7 +94,7 @@ datas += _sitk_datas
 hiddenimports += _wv_hidden
 hiddenimports += _sitk_hidden
 
-for _pkg in ('nibabel', 'pandas'):
+for _pkg in ('nibabel',):
     _d, _b, _h = _collect_all(_pkg)
     datas += _d
     hiddenimports += _h

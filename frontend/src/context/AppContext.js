@@ -207,10 +207,13 @@ export function AppProvider({ children }) {
     setSavedAt(null);
   }, [currentPatient, currentStudy]);
 
-  const startPipeline = useCallback(() => {
+  const startPipeline = useCallback((force = false) => {
     setPipelineState('running');
     setPipelineLog([]);
-    const es = new EventSource(`${API}/api/run-pipeline-stream`);
+    const url = force
+      ? `${API}/api/run-pipeline-stream?force=true`
+      : `${API}/api/run-pipeline-stream`;
+    const es = new EventSource(url);
     es.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.done) {

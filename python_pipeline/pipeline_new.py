@@ -26,12 +26,14 @@ from config import (
     DATASET_PATH,
     STS_DATASET,
     SELECTION_CSV,
+    FORCE_RERUN,
 )
 
 from ledger import _highest_patient_id_on_disk
 
 from dicom.dicom_anonymize import anonymize_series
 from dicom.dicom_tags import process_series_metadata
+from dicom.dicom_audit import audit_patient, log_audit_report
 
 from imaging.imaging_normalize import bias_correct_and_standardize
 from imaging.imaging_io import atomic_write_sitk
@@ -79,35 +81,79 @@ def main() -> None:
 
     root_dir = sts_dataset.parent / f"sts.{INSTITUTION}"
 
+    # Group series by patient ID so audit runs once per patient after all
+    # their series are anonymized, not once per series
+    from collections import defaultdict
+    patients: dict[str, list] = defaultdict(list)
     for info in series_info:
-        series_path = sts_dataset / "DICOM" / info.new_id / info.study / info.series
+        patients[info.new_id].append(info)
 
-        info.mrn = process_series_metadata(series_path, info.sts_name)
-        anonymize_series(series_path)
-        logger.info("Anonymized %s", series_path.relative_to(sts_dataset))
+    audit_reports = []
 
-        patient_dir = root_dir / f"sts.{INSTITUTION}.{info.new_id[2:]}"
-        nifti_path  = patient_dir / f"sts.{INSTITUTION}.{info.new_id[2:]}.{info.modality}.nii"
+    for new_id, patient_series in patients.items():
+        # ── Step 1: anonymize all series for this patient ────────────────
+        anonymized_series_paths = []
+        for info in patient_series:
+            series_path = sts_dataset / "DICOM" / info.new_id / info.study / info.series
+            info.mrn = process_series_metadata(series_path, info.sts_name)
+            anonymize_series(series_path)
+            logger.info("Anonymized %s", series_path.relative_to(sts_dataset))
+            anonymized_series_paths.append((series_path, info.series))
 
-        if nifti_path.exists():
-            logger.info("NIfTI already exists, skipping: %s", nifti_path)
-            success = True
-        else:
-            img     = bias_correct_and_standardize(series_path)
-            success = img is not None
-            if success:
-                atomic_write_sitk(img, nifti_path)
-                logger.info("Saved NIfTI → %s", nifti_path)
+        # ── Step 2: audit (silent per-patient — summary printed at end) ──
+        report = audit_patient(anonymized_series_paths, new_id)
+        audit_reports.append(report)
 
-        if not success:
-            logger.warning("Processing failed for %s; run output not updated.", info.sts_name)
+        if report.status == "FAILED":
+            logger.error(
+                "Skipping NIfTI output for %s — audit failed, PHI may remain.", new_id
+            )
             continue
 
-        _append_run_row(
-            run_output,
-            [info.orig_id, info.new_id, info.mrn, INSTITUTION, info.study, info.series, info.modality, info.sts_name],
-        )
-        logger.info("Run output appended: %s (MRN %s, %s)", info.new_id, info.mrn, info.modality.upper())
+        # ── Step 3: normalize and write NIfTI for each series ────────────
+        for info in patient_series:
+            series_path = sts_dataset / "DICOM" / info.new_id / info.study / info.series
+            patient_dir = root_dir / f"sts.{INSTITUTION}.{info.new_id[2:]}"
+            nifti_path  = patient_dir / f"sts.{INSTITUTION}.{info.new_id[2:]}.{info.modality}.nii"
+
+            if nifti_path.exists() and not FORCE_RERUN:
+                logger.info("NIfTI already exists, skipping: %s", nifti_path)
+                success = True
+            else:
+                img     = bias_correct_and_standardize(series_path)
+                success = img is not None
+                if success:
+                    atomic_write_sitk(img, nifti_path)
+                    logger.info("Saved NIfTI → %s", nifti_path)
+
+            if not success:
+                logger.warning("Processing failed for %s; run output not updated.", info.sts_name)
+                continue
+
+            _append_run_row(
+                run_output,
+                [info.orig_id, info.new_id, info.mrn, INSTITUTION, info.study, info.series, info.modality, info.sts_name],
+            )
+            logger.info("Run output appended: %s (MRN %s, %s)", info.new_id, info.mrn, info.modality.upper())
+
+    # ── End-of-run audit summary ─────────────────────────────────────────
+    passed       = [r for r in audit_reports if r.status == "PASSED"]
+    failed       = [r for r in audit_reports if r.status == "FAILED"]
+    needs_review = [r for r in audit_reports if r.status == "NEEDS_REVIEW"]
+
+    sep = "─" * 40
+    logger.info(sep)
+    logger.info("ANONYMIZATION AUDIT SUMMARY")
+    logger.info("  ✓  PASSED:       %d patient(s)", len(passed))
+    if needs_review:
+        logger.warning("  ⚠  NEEDS REVIEW: %d patient(s) — %s",
+                       len(needs_review), ", ".join(r.patient_id for r in needs_review))
+    if failed:
+        logger.error("  ✗  FAILED:       %d patient(s) — %s",
+                     len(failed), ", ".join(r.patient_id for r in failed))
+    if not failed and not needs_review:
+        logger.info("  All patients passed — data is safe to use.")
+    logger.info(sep)
 
 
 if __name__ == "__main__":

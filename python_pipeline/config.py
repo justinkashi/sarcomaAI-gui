@@ -16,4 +16,5 @@ DATASET_PATH  = Path(_cfg["dataset_path"]) if "dataset_path" in _cfg else Path()
 STS_DATASET   = Path(_cfg["sts_dataset"])  if "sts_dataset"  in _cfg else Path()
 SELECTION_CSV = Path(_cfg["selection_csv"]) if "selection_csv" in _cfg else Path()
 IS_NEW_DATASET = _cfg.get("is_new_dataset", True)
+FORCE_RERUN    = _cfg.get("force_rerun", False)
 DEFAULT_GLOB  = "IM*"

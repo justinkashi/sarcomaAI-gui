@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
+const API = 'http://localhost:5050';
+
 export default function TopBar() {
   const { totalStudies, completeStudies, allComplete, startPipeline, pipelineState } = useApp();
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showConfirm,      setShowConfirm]      = useState(false);
+  const [showRerunConfirm, setShowRerunConfirm] = useState(false);
 
   const handleRun = () => {
     setShowConfirm(false);
     startPipeline();
+  };
+
+  const handleRerun = async () => {
+    setShowRerunConfirm(false);
+    await fetch(`${API}/api/reset-run`, { method: 'POST' });
+    startPipeline(true);
   };
 
   return (
@@ -45,6 +54,24 @@ export default function TopBar() {
             {completeStudies} / {totalStudies} studies complete
           </span>
         </div>
+
+        {allComplete && pipelineState !== 'running' && (
+          <button
+            onClick={() => setShowRerunConfirm(true)}
+            style={{
+              padding: '0.4rem 1rem',
+              borderRadius: 6,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-secondary)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Re-run Pipeline
+          </button>
+        )}
 
         <button
           onClick={() => setShowConfirm(true)}
@@ -96,6 +123,42 @@ export default function TopBar() {
                 }}
               >
                 Start Pipeline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRerunConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 10, padding: '2rem', maxWidth: 420, width: '100%',
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Re-run Pipeline?</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: '1.5rem' }}>
+              This will reprocess all patients from scratch, including ones that already have output files. Existing NIfTI files will be overwritten.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowRerunConfirm(false)}
+                style={{
+                  padding: '0.45rem 1rem', borderRadius: 6, border: '1px solid var(--border)',
+                  background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: 13,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRerun}
+                style={{
+                  padding: '0.45rem 1rem', borderRadius: 6, border: 'none',
+                  background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                Re-run All
               </button>
             </div>
           </div>

@@ -170,6 +170,13 @@ def write_selections_csv(db_path: Path, out_path: Path) -> int:
     return len(rows)
 
 
+def reset_all_selections(db_path: Path) -> None:
+    """Mark every selection as pending so the pipeline re-queues them all."""
+    with _connect(db_path) as con:
+        con.execute("UPDATE selections SET status='pending', updated_at=?",
+                    (datetime.utcnow().isoformat(),))
+
+
 def mark_batch_processed(db_path: Path, pairs: List[Tuple[str, str]]) -> None:
     now = datetime.utcnow().isoformat()
     with _connect(db_path) as con:

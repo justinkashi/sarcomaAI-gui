@@ -1,4 +1,10 @@
+May 15
+- added testing of _ instead of opening app 
+- removed matplotlib and pandas
+- Trying alternatives to PyInstaller: cannot directly use nuitka if using certain python packages like SimpleITK 
 May 14
+- Used pywebview to launch in own window plus fix dock issue 
+- Removed pycerr package, 1.5Gb -> 400Mb 
 - waiting on histopathology data
 - Windows.exe needs a signature, digital certification? -Rukun 
 
