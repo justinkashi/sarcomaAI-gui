@@ -206,5 +206,3 @@ build_app.bat
 This GUI is the data ingestion layer for the **SarcomaAI federated learning initiative** — a multi-institution collaboration between McGill University Health Centre (MUHC) and Memorial Sloan Kettering Cancer Center (MSKCC) to build the first end-to-end multimodal AI model for soft tissue sarcoma prognosis. The underlying model is published:
 
 > Bozzo et al. *"A multimodal neural network with gradient blending improves predictions of survival and metastasis in sarcoma."* NPJ Precision Oncology, 2024. [https://doi.org/10.1038/s41698-024-00695-7](https://doi.org/10.1038/s41698-024-00695-7)
-
-**Built by Justin Kashi** — McGill University (MSc Biomedical Engineering), as part of the SarcomaAI team.
